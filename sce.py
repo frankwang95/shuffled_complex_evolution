@@ -2,6 +2,7 @@ import subprocess
 import threading
 import random
 import time
+import numpy as np
 import multiprocessing as mp
 
 from util_settings import *
@@ -115,7 +116,7 @@ class SCEController:
 
 	def init_complexes(self):
 		self.add_log('first initialization of complexes (iteration {0})...'.format(self.iters))
-		compute_handles = [[random.uniform(r[0], r[1]) for r in self.sample_space] for _ in range(self.n_complex * self.n_points)]
+		compute_handles = [np.array([random.uniform(r[0], r[1]) for r in self.sample_space] for _ in range(self.n_complex * self.n_points))]
 		compute_handles = [GenericComputeHandle(args, self) for args in compute_handles]
 		self.eval_compute_handles(compute_handles)
 		compute_handles.sort(key=lambda x : x.value)
