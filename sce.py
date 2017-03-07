@@ -212,9 +212,3 @@ class SCEController:
 		return(0)
 
 
-
-def test_function(nparr):
-	return(nparr[0] ** 2 + nparr[1] ** 2)
-
-
-#SCEController('python', test_function, np.array([[-1,1], [-1,1]]))
