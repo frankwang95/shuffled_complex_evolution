@@ -1,32 +1,26 @@
 import time
-import generic_io
 
 
 
 #################### SETTINGS ####################
 PARALLEL_MODE = 'serial'
-OBJF_MODE = 'generic'
-OBJF_EXE = './a.out'
-SAMPLE_SPACE = [(-1, 1)]
 N_COMPLEX = 3
-N_POINTS = 10
+N_POINTS = 1000
 N_EVOLUTION_SAMPLE = 5
-N_GEN_OFFSPRING = 10
-N_EVOLUTIONS = 10
-MAX_ITERS = 10
+N_GEN_OFFSPRING = 5
+N_EVOLUTIONS = 5
+MAX_ITERS = 1
 LOG_FILE = 'testing.log' # str(time.time()) + '.log'
-IO = generic_io.io
 
 
 
 #################### MISC FUNCTIONS ####################
 def parallel_compute_helper(ch):
-	ch.compute()
-	return(0)
+	return(ch.compute())
 
 
 def parallel_evolve_helper(ch):
-	ch.evovlve()
+	ch.evolve()
 	return(0)
 
 

@@ -35,7 +35,7 @@ class Complex:
 
 
 
-class GenericComputeHandle:
+class ComputeHandle:
 	def __init__(self, args, controller):
 		self.args = np.array(args)
 		self.controller = controller
@@ -43,33 +43,35 @@ class GenericComputeHandle:
 
 
 	def compute(self):
-		str_args = [str(arg) for arg in self.args]
-		if not self.value: self.value = float(subprocess.check_output([self.controller.objf_exe] + str_args))
-		return(0)
+		if self.controller.objf_mode == 'generic':
+			str_args = [str(arg) for arg in self.args]
+			if not self.value: self.value = float(subprocess.check_output([self.controller.function] + str_args))
+		elif self.controller.objf_mode == 'python':
+			if not self.value: self.value = self.controller.function(self.args)
+		return(self.value)
 
 
 
 class SCEController:
 	def __init__(
 		self,
+		objf_mode,
+		function,
+		sample_space,
 		parallel_mode=PARALLEL_MODE,
-		objf_mode=OBJF_MODE,
-		objf_exe=OBJF_EXE,
-		sample_space=SAMPLE_SPACE,
 		n_complex=N_COMPLEX,
 		n_points=N_POINTS,
 		n_evolution_sample = N_EVOLUTION_SAMPLE,
 		n_gen_offspring = N_GEN_OFFSPRING,
 		n_evolutions = N_EVOLUTIONS,
 		max_iters=MAX_ITERS,
-		log_file = LOG_FILE,
-		io = IO
+		log_file = LOG_FILE
 	):
 		
 		# loading in input variables
 		self.parallel_mode = parallel_mode
 		self.objf_mode = objf_mode
-		self.objf_exe = objf_exe
+		self.function = function
 		self.sample_space = sample_space
 		self.n_complex = n_complex
 		self.n_points = n_points
@@ -79,6 +81,8 @@ class SCEController:
 		self.max_iters = max_iters
 
 		# configuring other variables
+		self.best_value = float('inf')
+		self.best_args = None
 		self.prob = [2.0 * (self.n_points - i ) / (self.n_points * (self.n_points + 1)) for i in range(self.n_points)]
 		for i in range(1, self.n_points): self.prob[i] += self.prob[i - 1]
 		self.iters = 0
@@ -89,8 +93,7 @@ class SCEController:
 		# starting SCE algorithm
 		self.main_loop()
 
-		# starting IO
-		print(self.log)
+		print "best value is {0} at {1}".format(self.best_value, self.best_args)
 
 
 	def main_loop(self):
@@ -98,11 +101,16 @@ class SCEController:
 		while self.iters < self.max_iters:
 			self.evolve_complexes()
 			self.shuffle_complexes()
+
+			for c in self.complexes:
+				if c.compute_handles[0].value < self.best_value:
+					self.best_value = c.compute_handles[0].value
+					self.best_args = c.compute_handles[0].args
 		return(0)
 			
 
 	def add_log(self, log_message):
-		formatted_message = get_time_string() + 'CONTROLLER:' + log_message
+		formatted_message = get_time_string() + 'CONTROLLER: ' + log_message
 		self.log_file.write(formatted_message + '\n')
 		self.log.append(formatted_message)
 		return(0)
@@ -117,7 +125,7 @@ class SCEController:
 	def init_complexes(self):
 		self.add_log('first initialization of complexes (iteration {0})...'.format(self.iters))
 		compute_handles = [[random.uniform(r[0], r[1]) for r in self.sample_space] for _ in range(self.n_complex * self.n_points)]
-		compute_handles = [GenericComputeHandle(args, self) for args in compute_handles]
+		compute_handles = [ComputeHandle(args, self) for args in compute_handles]
 		self.eval_compute_handles(compute_handles)
 		compute_handles.sort(key=lambda x : x.value)
 
@@ -148,11 +156,14 @@ class SCEController:
 			for c in self.complexes: c.evolve()
 
 		elif self.parallel_mode == 'threaded':
-			for ch in compute_handles: threading.Thread(target=ch.evolve)
+			threads = []
+			for c in self.complexes: threads.append(threading.Thread(target=c.evolve))
+			for t in threads:
+				t.start()
+				t.join()
 		
 		else:
-			pool = mp.Pool(self.parallel_mode)
-			pool.map(parallel_evolve_helper, self.complexes)
+			for c in self.complexes: c.evolve()
 
 		self.add_log('evolving complexes (iteration {0})...'.format(self.iters))
 		self.add_log('complexes evolved (iteration {0})'.format(self.iters))
@@ -164,14 +175,28 @@ class SCEController:
 			for ch in compute_handles: ch.compute()
 		
 		elif self.parallel_mode == 'threaded':
-			for ch in compute_handles: threading.Thread(target=ch.compute)
+			threads = []
+			for ch in compute_handles: threads.append(threading.Thread(target=ch.compute))
+			for t in threads:
+				t.start()
+				t.join()
 
 		else:
 			pool = mp.Pool(self.parallel_mode)
-			pool.map(parallel_compute_helper, compute_handles)
+			val = pool.map(parallel_compute_helper, compute_handles)
+			for chi in range(len(compute_handles)):
+				compute_handles[chi].value = val[chi]
 
 		return(0)
 
 
 
-SCEController()
+
+################################0#############
+def test_function(nparr):
+	time.sleep(0.002)
+	return(nparr[0] ** 2 + nparr[1] ** 2)
+
+
+#SCEController('python', test_function)
+#print test_function([ 0.00234203, -0.61575054])
