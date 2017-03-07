@@ -22,15 +22,39 @@ class Complex:
 
 	def evolve(self):
 		for _ in range(self.controller.n_evolutions):
+			all_args = np.array([ch.args for ch in self.compute_handles])
+			h = np.array([[np.min(all_args[:,i]), np.max(all_args[:,i])] for i in range(self.controller.sample_space.shape[0])])
+
 			evolution_sample =  []
 			while len(evolution_sample) < self.controller.n_evolution_sample:
 				i = self.controller.generate_random()
 				ch = self.compute_handles[i]
-				if (ch,i) not in evolution_sample: evolution_sample.append((ch,i))
+				if ch not in evolution_sample: evolution_sample.append([ch, i])
+
 			for _ in range(self.controller.n_gen_offspring):
 				evolution_sample.sort(key=lambda x : x[0].value)
 				centroid = compute_centroid([ch[0] for ch in evolution_sample[:-1]])
-				r = [2 * arg for arg in centroid]
+
+				r = 2 * centroid - evolution_sample[-1][0].args
+				if np.any(self.controller.sample_space[:,0] - r) > 0 or np.any(self.controller.sample_space[:,1] - r < 0):
+					r = np.array([random.uniform(r[0], r[1]) for r in h])
+				ch = ComputeHandle(r, self.controller)
+				ch.compute()
+
+				if ch.value < evolution_sample[-1][0].value: evolution_sample[-1][0] = ch
+				else:
+					r = (centroid + evolution_sample[-1][0].args) / 2
+					ch = ComputeHandle(r, self.controller)
+					ch.compute()
+					if ch.value < evolution_sample[-1][0].value: evolution_sample[-1][0] = ch
+					else:
+						r = np.array([random.uniform(r[0], r[1]) for r in h])
+						ch = ComputeHandle(r, self.controller)
+						ch.compute()
+						evolution_sample[-1][0] = ch
+
+			for (ch, i) in evolution_sample:
+				self.compute_handles[i] = ch
 		return(0)
 
 
@@ -93,8 +117,6 @@ class SCEController:
 		# starting SCE algorithm
 		self.main_loop()
 
-		print "best value is {0} at {1}".format(self.best_value, self.best_args)
-
 
 	def main_loop(self):
 		self.init_complexes()
@@ -124,7 +146,7 @@ class SCEController:
 
 	def init_complexes(self):
 		self.add_log('first initialization of complexes (iteration {0})...'.format(self.iters))
-		compute_handles = [[random.uniform(r[0], r[1]) for r in self.sample_space] for _ in range(self.n_complex * self.n_points)]
+		compute_handles = [np.array([random.uniform(r[0], r[1]) for r in self.sample_space]) for _ in range(self.n_complex * self.n_points)]
 		compute_handles = [ComputeHandle(args, self) for args in compute_handles]
 		self.eval_compute_handles(compute_handles)
 		compute_handles.sort(key=lambda x : x.value)
@@ -191,12 +213,8 @@ class SCEController:
 
 
 
-
-################################0#############
 def test_function(nparr):
-	time.sleep(0.002)
 	return(nparr[0] ** 2 + nparr[1] ** 2)
 
 
-#SCEController('python', test_function)
-#print test_function([ 0.00234203, -0.61575054])
+#SCEController('python', test_function, np.array([[-1,1], [-1,1]]))
